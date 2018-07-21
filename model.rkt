@@ -1,7 +1,9 @@
 #lang racket
 
+(require srfi/60)  ; bitwise operations
+
 (provide load-model
-	 load-program-model
+	 load-problem-model
 	 model-voxel-full?
 	 model-voxel-fill!)
 
@@ -12,14 +14,20 @@
 (define-struct model (res bits) #:transparent)
 
 (define (load-model filename)
+  (define (pct-filled res bits)
+    (* (/ (for/sum ((b bits))
+            (bit-count b))
+          (* res res res))
+       100.0))
   (call-with-input-file
     filename
     (lambda (in)
       (let ((res (read-byte in))
 	    (bits (port->bytes in)))
-	(printf "Loaded ~a: res=~a, ~a bytes (immutable? ~a).~n"
+	(printf "Loaded ~a: res=~a, ~a% full, ~a bytes (immutable? ~a).~n"
 		filename
 		res
+                (~a #:max-width 6 (pct-filled res bits))
 		(bytes-length bits)
 		(immutable? bits))
 	(make-model res bits)))))
