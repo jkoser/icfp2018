@@ -1,9 +1,12 @@
 #lang racket
 
-(require srfi/60)  ; bitwise operations
+(require (only-in srfi/60
+                  bit-count))
 
 (provide load-model
 	 load-problem-model
+         create-model
+         copy-model
 	 model-voxel-full?
 	 model-voxel-fill!)
 
@@ -11,7 +14,7 @@
 ;; where set bits represent filled voxels.  Bits are packed into a byte vector,
 ;; with 8 bits per byte.
 
-(define-struct model (res bits) #:transparent)
+(define-struct model (res bits))
 
 (define (load-model filename)
   (define (pct-filled res bits)
@@ -35,6 +38,14 @@
 (define (load-problem-model n)
   (load-model (format "problemsL/LA~a_tgt.mdl"
 		      (~a n #:width 3 #:align 'right #:pad-string "0"))))
+
+(define (create-model res)
+  (make-model res
+              (make-bytes (ceiling (/ (* res res res) 8)) 0)))
+
+(define (copy-model m)
+  (make-model (model-res m)
+              (bytes-copy (model-bits m))))
 
 (define (model-bit-index m x y z)
   (let ((r (model-res m)))
