@@ -9,6 +9,11 @@
   (bid pos seeds)
   #:transparent #:mutable)
 
+(define (create-first-bot n)
+  (make-bot 1
+            (make-c 0 0 0)
+            (range 2 (+ n 1))))
+
 (define-struct system
   (energy harmonics model bots trace time)
   #:transparent #:mutable)
@@ -17,8 +22,6 @@
   (make-system 0
                'low
                (create-model r)
-               (list (make-bot 1
-                               (make-c 0 0 0)
-                               (range 2 (+ n 1))))
+               (list (create-first-bot n))
                '()
                0))

@@ -7,6 +7,7 @@
 	 load-problem-model
          create-model
          copy-model
+         model-res
 	 model-voxel-full?
 	 model-voxel-fill!)
 

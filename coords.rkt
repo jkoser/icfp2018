@@ -5,16 +5,16 @@
 ;; Coordinates are represented as 3-lists
 (define (make-c x y z)
   (list x y z))
-(define c-x first)
-(define c-y second)
-(define c-z third)
+(define x first)
+(define y second)
+(define z third)
 
 ;; Coordinate diffs are represented as 3-lists
 (define (make-d x y z)
   (list x y z))
-(define d-x first)
-(define d-y second)
-(define d-z third)
+(define dx first)
+(define dy second)
+(define dz third)
 
 ;; Some possibly helpful units
 (define up '(0 1 0))
@@ -50,14 +50,16 @@
          (> ml 0))))
 
 ;; Short linear coordinate diff
+(define SLD-MAX 5)
 (define (sld? d)
   (and (ld? d)
-       (<= (mlen d) 5)))
+       (<= (mlen d) SLD-MAX)))
 
 ;; Long linear coordinate diff
+(define LLD-MAX 15)
 (define (lld? d)
   (and (ld? d)
-       (<= (mlen d) 15)))
+       (<= (mlen d) LLD-MAX)))
 
 ;; Near coordinate diff
 (define (nd? d)
