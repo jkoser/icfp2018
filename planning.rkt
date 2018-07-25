@@ -96,6 +96,21 @@
   (for/list ((cmd trace))
     (list (cons id cmd))))
 
+;; Combines two tagged traces, adding (wait) instructions as necessary
+;; if the traces are of unequal length.
+(define (interleave-traces trace1 bot1 trace2 bot2)
+  (let* ((n1 (length trace1))
+         (n2 (length trace2))
+         (padded1 (if (>= n1 n2)
+                    trace1
+                    (append trace1 (make-list (- n2 n1)
+                                              `((,(bot-bid bot1) wait))))))
+         (padded2 (if (<= n1 n2)
+                    trace2
+                    (append trace2 (make-list (- n1 n2)
+                                              `((,(bot-bid bot2) wait)))))))
+    (map append padded1 padded2)))
+
 ;; Removes bot ids and flattens the trace across time steps.
 (define (strip-trace trace)
   (apply append
@@ -151,6 +166,10 @@
 
 
 (define (compile-plan plan source-model target-model num-seeds)
+  (define (compile-cmds cmds bot lane)
+    (apply append
+           (for/list ((cmd cmds))
+             (compile-cmd cmd bot lane))))
   (define (compile-cmd cmd bot lane)
     (match cmd
       ((list 'move-to dest)
@@ -162,16 +181,24 @@
        (tag-trace (compile-assemble-in-lane
                     bot lane free-plane target-model)
                   (bot-bid bot)))
-      ((list 'spawn pos2 num-seeds)
-       'TODO)))
+      ((list 'spawn pos2 num-seeds thread1 thread2)
+       (let*-values (((pos1) (bot-pos bot))
+                     ((lane1 lane2) (lane-split lane pos1 pos2))
+                     ((bot2) (bot-fission! bot pos2 num-seeds))
+                     ((trace1) (compile-cmds thread1 bot lane1))
+                     ((trace2) (compile-cmds thread2 bot2 lane2))
+                     ((trace12) (interleave-traces trace1 bot trace2 bot2)))
+         (bot-fusion! bot bot2)
+         `(((,(bot-bid bot) fission ,(c- pos2 pos1) ,num-seeds))
+           ,@trace12
+           ((,(bot-bid bot) fusionp ,(c- (bot-pos bot2) (bot-pos bot)))
+            (,(bot-bid bot2) fusions ,(c- (bot-pos bot) (bot-pos bot2)))))))))
   (let* ((res (model-res source-model))
          (bot (create-first-bot num-seeds))
          (lane (make-lane (make-c 0 0 0)
                           (make-c (- res 1) (- res 1) (- res 1)))))
     `((flip)
       ,@(strip-trace
-          (apply append
-                 (for/list ((cmd plan))
-                   (compile-cmd cmd bot lane))))
+          (compile-cmds plan bot lane))
       (flip)
       (halt))))
