@@ -10,7 +10,7 @@
 (define num-disassembly-problems 186)
 (define num-reassembly-problems 115)
 
-(define strategy strategy-assemble-in-slices)
+(define strategy strategy-balanced-slices)
 
 (for ((n (in-range 1 (+ num-assembly-problems 1))))
   (let* ((target-filename

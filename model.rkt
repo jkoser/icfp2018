@@ -4,12 +4,12 @@
                   bit-count))
 
 (provide load-model
-	 load-problem-model
+         load-problem-model
          create-model
          copy-model
          model-res
-	 model-voxel-full?
-	 model-voxel-fill!)
+         model-voxel-full?
+         model-voxel-fill!)
 
 ;; A model is represented as a bit vector with indexes X * R * R + Y * R + Z,
 ;; where set bits represent filled voxels.  Bits are packed into a byte vector,
@@ -27,18 +27,17 @@
     filename
     (lambda (in)
       (let ((res (read-byte in))
-	    (bits (port->bytes in)))
-	(printf "Loaded ~a: res=~a, ~a% full, ~a bytes (immutable? ~a).~n"
-		filename
-		res
+            (bits (port->bytes in)))
+        (printf "Loaded ~a: res=~a, ~a% full, ~a bytes.~n"
+                filename
+                res
                 (~a #:max-width 6 (pct-filled res bits))
-		(bytes-length bits)
-		(immutable? bits))
-	(make-model res bits)))))
+                (bytes-length bits))
+        (make-model res bits)))))
 
 (define (load-problem-model n)
   (load-model (format "problemsL/LA~a_tgt.mdl"
-		      (~a n #:width 3 #:align 'right #:pad-string "0"))))
+                      (~a n #:width 3 #:align 'right #:pad-string "0"))))
 
 (define (create-model res)
   (make-model res
@@ -59,6 +58,6 @@
 (define (model-voxel-fill! m x y z)
   (let-values (((i j) (model-bit-index m x y z)))
     (bytes-set! (model-bits m)
-		i
-		(bitwise-ior (bytes-ref (model-bits m) i)
-			     (arithmetic-shift 1 j)))))
+                i
+                (bitwise-ior (bytes-ref (model-bits m) i)
+                             (arithmetic-shift 1 j)))))
