@@ -1,32 +1,27 @@
 #lang racket
 
 (require "model.rkt")
+(require "strategy.rkt")
 (require "planning.rkt")
 (require "trace.rkt")
 
-(define (make-plan-slices n xmin xmax res)
-  (when (< n 0)
-    (error "negative n"))
-  (if (or (= n 0) (= xmin xmax))
-    '((assemble-in-lane top))
-    (let* ((m (quotient (- n 1) 2))
-           (width (+ (- xmax xmin) 1))
-           (split (ceiling (* width (/ (- n m) (+ n 1)))))
-           (xmid (+ xmin split -1)))
-      `((move-to (,xmid 0 0))
-        (spawn (,(+ xmid 1) 0 0)
-               ,m
-               (,@(make-plan-slices (- n m 1) xmin xmid res)
-                (move-to (,xmid ,(- res 1) 0)))
-               (,@(make-plan-slices m (+ xmid 1) xmax res)
-                (move-to (,(+ xmid 1) ,(- res 1) 0))))))))
+(define num-seeds 39)
+(define num-assembly-problems 186)
+(define num-disassembly-problems 186)
+(define num-reassembly-problems 115)
 
+(define strategy strategy-assemble-in-slices)
 
-(let* ((target-model (load-problem-model 67))
-       (res (model-res target-model))
-       (source-model (create-model res))
-       (plan `(,@(make-plan-slices 19 0 (- res 1) res)
-               (move-to (0 0 0))))
-       (_ (pretty-print plan))
-       (trace (compile-plan plan source-model target-model 19)))
-  (save-trace! "out.nbt" trace))
+(for ((n (in-range 1 (+ num-assembly-problems 1))))
+  (let* ((target-filename
+           (format "problemsF/FA~a_tgt.mdl"
+                   (~a n #:width 3 #:align 'right #:pad-string "0")))
+         (target-model (load-model target-filename))
+         (res (model-res target-model))
+         (source-model (create-model res))
+         (plan (strategy num-seeds source-model target-model))
+         (trace (compile-plan plan source-model target-model num-seeds))
+         (trace-filename
+           (format "solnsF/FA~a_soln.nbt"
+                   (~a n #:width 3 #:align 'right #:pad-string "0"))))
+    (save-trace! trace-filename trace)))
