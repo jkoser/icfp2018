@@ -35,9 +35,9 @@
       `((move-to (,xmid 0 0))
         (spawn (,(+ xmid 1) 0 0)
                ,m
-               (,@(make-plan-slices (- n m 1) xmin xmid res)
+               (,@(make-plan-balanced (- n m 1) xmin xmid res weights)
                 (move-to (,xmid ,(- res 1) 0)))
-               (,@(make-plan-slices m (+ xmid 1) xmax res)
+               (,@(make-plan-balanced m (+ xmid 1) xmax res weights)
                 (move-to (,(+ xmid 1) ,(- res 1) 0))))))))
 
 ;; Divides the space into roughly equal-weight slices and assigns a bot to each.
@@ -57,8 +57,8 @@
     '((assemble-in-lane top))
     (let* ((m (quotient (- n 1) 2))
            (width (+ (- xmax xmin) 1))
-           (split (ceiling (* width (/ (- n m) (+ n 1)))))
-           (xmid (+ xmin split -1)))
+           (left (floor (* width (/ (- n m) (+ n 1)))))
+           (xmid (max xmin (min (+ xmin left -1) (- xmax 1)))))
       `((move-to (,xmid 0 0))
         (spawn (,(+ xmid 1) 0 0)
                ,m
