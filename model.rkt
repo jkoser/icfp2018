@@ -7,9 +7,11 @@
          load-problem-model
          create-model
          copy-model
+         model=?
          model-res
          model-voxel-full?
-         model-voxel-fill!)
+         model-voxel-fill!
+         model-voxel-void!)
 
 ;; A model is represented as a bit vector with indexes X * R * R + Y * R + Z,
 ;; where set bits represent filled voxels.  Bits are packed into a byte vector,
@@ -47,6 +49,10 @@
   (make-model (model-res m)
               (bytes-copy (model-bits m))))
 
+(define (model=? m1 m2)
+  (and (= (model-res m1) (model-res m2))
+       (equal? (model-bits m1) (model-bits m2))))
+
 (define (model-bit-index m x y z)
   (let ((r (model-res m)))
     (quotient/remainder (+ (* x r r) (* y r) z) 8)))
@@ -61,3 +67,10 @@
                 i
                 (bitwise-ior (bytes-ref (model-bits m) i)
                              (arithmetic-shift 1 j)))))
+
+(define (model-voxel-void! m x y z)
+  (let-values (((i j) (model-bit-index m x y z)))
+    (bytes-set! (model-bits m)
+                i
+                (bitwise-and (bytes-ref (model-bits m) i)
+                             (bitwise-not (arithmetic-shift 1 j))))))
