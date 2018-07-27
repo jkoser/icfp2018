@@ -16,6 +16,29 @@
 (define dy second)
 (define dz third)
 
+;; Regions are represented as 2-lists of coordinates, normalized so
+;; we can use equal? to compare.
+(define (make-region c1 c2)
+  (list (make-c (min (x c1) (x c2))
+                (min (y c1) (y c2))
+                (min (z c1) (z c2)))
+        (make-c (max (x c1) (x c2))
+                (max (y c1) (y c2))
+                (max (z c1) (z c2)))))
+
+(define (xmin r) (x (first r)))
+(define (xmax r) (x (second r)))
+(define (ymin r) (y (first r)))
+(define (ymax r) (y (second r)))
+(define (zmin r) (z (first r)))
+(define (zmax r) (z (second r)))
+
+;; Region dimension
+(define (dim r)
+  (+ (if (= (x (first r)) (x (second r))) 0 1)
+     (if (= (y (first r)) (y (second r))) 0 1)
+     (if (= (z (first r)) (z (second r))) 0 1)))
+
 ;; Some possibly helpful units
 (define up '(0 1 0))
 (define down '(0 -1 0))
@@ -65,3 +88,8 @@
 (define (nd? d)
   (and (<= 1 (mlen d) 2)
        (= (clen d) 1)))
+
+;; Far coordinate diff
+(define FD-MAX 30)
+(define (fd? d)
+  (<= 1 (clen d) FD-MAX))
