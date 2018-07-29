@@ -43,43 +43,28 @@
 ;; Note that once the two bots finish their individual tasks, fusion is
 ;; implicit.
 
-(define-struct lane (min-corner max-corner) #:transparent)
 
 ;; Returns the new lanes as two values, with the first value
 ;; corresponding to pos1 and the second to pos2.
 (define (lane-split lane pos1 pos2)
-  (let ((minc (lane-min-corner lane))
-        (maxc (lane-max-corner lane)))
-    (cond ((> (x pos1) (x pos2))
-           (values (make-lane (make-c (x pos1) (y minc) (z minc))
-                              maxc)
-                   (make-lane minc
-                              (make-c (x pos2) (y maxc) (z maxc)))))
-          ((< (x pos1) (x pos2))
-           (values (make-lane minc
-                              (make-c (x pos1) (y maxc) (z maxc)))
-                   (make-lane (make-c (x pos2) (y minc) (z minc))
-                              maxc)))
-          ((> (y pos1) (y pos2))
-           (values (make-lane (make-c (x minc) (y pos1) (z minc))
-                              maxc)
-                   (make-lane minc
-                              (make-c (x maxc) (y pos2) (z maxc)))))
-          ((< (y pos1) (y pos2))
-           (values (make-lane minc
-                              (make-c (x maxc) (y pos1) (z maxc)))
-                   (make-lane (make-c (x minc) (y pos2) (z minc))
-                              maxc)))
-          ((> (z pos1) (z pos2))
-           (values (make-lane (make-c (x minc) (y minc) (z pos1))
-                              maxc)
-                   (make-lane minc
-                              (make-c (x maxc) (y maxc) (z pos2)))))
-          ((< (z pos1) (z pos2))
-           (values (make-lane minc
-                              (make-c (x maxc) (y maxc) (z pos1)))
-                   (make-lane (make-c (x minc) (y minc) (z pos2))
-                              maxc))))))
+  (cond ((> (x pos1) (x pos2))
+         (values (region-above-x lane (x pos1))
+                 (region-below-x lane (x pos2))))
+        ((< (x pos1) (x pos2))
+         (values (region-below-x lane (x pos1))
+                 (region-above-x lane (x pos2))))
+        ((> (y pos1) (y pos2))
+         (values (region-above-y lane (y pos1))
+                 (region-below-y lane (y pos2))))
+        ((< (y pos1) (y pos2))
+         (values (region-below-y lane (y pos1))
+                 (region-above-y lane (y pos2))))
+        ((> (z pos1) (z pos2))
+         (values (region-above-z lane (z pos1))
+                 (region-below-z lane (z pos2))))
+        ((< (z pos1) (z pos2))
+         (values (region-below-z lane (z pos1))
+                 (region-above-z lane (z pos2))))))
 
 ;; In building a trace, we must associate each instruction with the ID
 ;; of the bot that performs it.  This way we can make sure the instructions
@@ -150,19 +135,17 @@
 (define (compile-assemble-in-lane bot lane free-plane target-model)
   (when (not (equal? free-plane 'top))
     (error "assemble-in-lane only implemented for top" free-plane))
-  (let ((corner0 (lane-min-corner lane))
-        (corner1 (lane-max-corner lane)))
-    (apply
-      append
-      (for*/list ((j (in-range (y corner0) (y corner1)))
-                  (i (in-range (x corner0) (+ (x corner1) 1)))
-                  (k (in-range (z corner0) (+ (z corner1) 1)))
-                  #:when (model-voxel-full? target-model i j k))
-        (begin0
-          (append (compile-move (bot-pos bot) (make-c i (+ j 1) k)
-                                lane '())
-                  (list '(fill (0 -1 0))))
-          (set-bot-pos! bot (make-c i (+ j 1) k)))))))
+  (apply
+    append
+    (for*/list ((j (in-range (ymin lane) (ymax lane)))
+                (i (in-range (xmin lane) (+ (xmax lane) 1)))
+                (k (in-range (zmin lane) (+ (zmax lane) 1)))
+                #:when (model-voxel-full? target-model i j k))
+      (begin0
+        (append (compile-move (bot-pos bot) (make-c i (+ j 1) k)
+                              lane '())
+                (list '(fill (0 -1 0))))
+        (set-bot-pos! bot (make-c i (+ j 1) k))))))
 
 
 (define (compile-plan plan source-model target-model num-seeds)
@@ -195,8 +178,8 @@
             (,(bot-bid bot2) fusions ,(c- (bot-pos bot) (bot-pos bot2)))))))))
   (let* ((res (model-res source-model))
          (bot (create-first-bot num-seeds))
-         (lane (make-lane (make-c 0 0 0)
-                          (make-c (- res 1) (- res 1) (- res 1)))))
+         (lane (make-region (make-c 0 0 0)
+                            (make-c (- res 1) (- res 1) (- res 1)))))
     `((flip)
       ,@(strip-trace
           (compile-cmds plan bot lane))
