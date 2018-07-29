@@ -12,7 +12,7 @@
 (define num-disassembly-problems 186)
 (define num-reassembly-problems 115)
 
-(define strategy strategy-balanced-slices)
+(define strategy strategy-slice-and-dice)
 
 (define (solve-all)
   (for ((n (in-range 1 (+ num-assembly-problems 1))))
@@ -38,6 +38,7 @@
            (res (model-res target-model))
            (source-model (create-model res))
            (plan (strategy num-seeds source-model target-model))
+           ;(_ (pretty-print plan))
            (trace (compile-plan plan source-model target-model num-seeds))
            (system (create-system res num-seeds trace)))
       (run-system! system)

@@ -33,6 +33,30 @@
 (define (zmin r) (z (first r)))
 (define (zmax r) (z (second r)))
 
+(define (region-below-x r x)
+  (make-region (first r)
+               (make-c x (ymax r) (zmax r))))
+
+(define (region-above-x r x)
+  (make-region (make-c x (ymin r) (zmin r))
+               (second r)))
+
+(define (region-below-y r y)
+  (make-region (first r)
+               (make-c (xmax r) y (zmax r))))
+
+(define (region-above-y r y)
+  (make-region (make-c (xmin r) y (zmin r))
+               (second r)))
+
+(define (region-below-z r z)
+  (make-region (first r)
+               (make-c (xmax r) (ymax r) z)))
+
+(define (region-above-z r z)
+  (make-region (make-c (xmin r) (ymin r) z)
+               (second r)))
+
 ;; Region dimension
 (define (dim r)
   (+ (if (= (x (first r)) (x (second r))) 0 1)
