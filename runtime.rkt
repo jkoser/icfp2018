@@ -151,9 +151,10 @@
                      <
                      #:key bot-bid))
   (define n (length bots))
-  (when (< (length (system-trace s)) n)
+  (define bot-cmds (for/list ((b bots) (c (system-trace s)))
+                     (cons b c)))
+  (when (< (length bot-cmds) n)
       (error "not enough commands"))
-  (define bot-cmds (map cons bots (take (system-trace s) n)))
   (define cmd-groups (bot-cmd-groups bot-cmds))
   (define r (model-res (system-model s)))
   (if (equal? (system-harmonics s) 'high)
