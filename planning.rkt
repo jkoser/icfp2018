@@ -155,23 +155,38 @@
     (apply
       append
       (for*/list ((k z-stops)
-                  (i x-stops)
-                  (j (in-range (ymin lane)
-                               (+ (ymax lane) 1))))
-        (define to-fill
-          (filter (lambda (nd)
-                    (let ((c (c+ (make-c i j k) nd)))
-                      (and (region-includes? lane c)
-                           (model-voxel-full? target-model
-                                              (x c) (y c) (z c)))))
-                  offsets))
-        (if (empty? to-fill)
-          '()
-          (begin0
-            (append (compile-move (bot-pos bot) (make-c i j k)
-                                  lane '())
-                    (map (lambda (nd) `(fill ,nd)) to-fill))
-            (set-bot-pos! bot (make-c i j k)))))))
+                  (i x-stops))
+        (define make-tower
+          (for/list ((j (in-range (ymin lane)
+                                  (+ (ymax lane) 1))))
+            (define to-fill
+              (filter (lambda (nd)
+                        (let ((c (c+ (make-c i j k) nd)))
+                          (and (region-includes? lane c)
+                               (model-voxel-full? target-model
+                                                  (x c) (y c) (z c)))))
+                      offsets))
+            (if (empty? to-fill)
+              '()
+              (begin0
+                (append (compile-move (bot-pos bot) (make-c i j k)
+                                      lane '())
+                        (map (lambda (nd) `(fill ,nd)) to-fill))
+                (set-bot-pos! bot (make-c i j k))))))
+        ;; Ensure a clear Z-X-Y move to the base of the next tower.
+        (let ((pos-x1 (c+ (bot-pos bot) '(1 0 0)))
+              (pos-z1 (c+ (bot-pos bot) '(0 0 1))))
+          (if (or (and (region-includes? lane pos-x1)
+                       (model-voxel-full? target-model
+                                          (x pos-x1) (y pos-x1) (z pos-x1)))
+                  (and (region-includes? lane pos-z1)
+                       (model-voxel-full? target-model
+                                          (x pos-z1) (y pos-z1) (z pos-z1))))
+            (begin0
+              (append (apply append make-tower)
+                      '((smove (0 1 0))))
+              (set-bot-pos! bot (c+ (bot-pos bot) '(0 1 0))))
+            (apply append make-tower))))))
   ;; We need to ensure that the bot will have a clear Z-X-Y move to its
   ;; next waypoint, so we move to the top of the lane.
   (define pos (bot-pos bot))
