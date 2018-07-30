@@ -135,17 +135,50 @@
 (define (compile-assemble-in-lane bot lane free-plane target-model)
   (when (not (equal? free-plane 'top))
     (error "assemble-in-lane only implemented for top" free-plane))
-  (apply
-    append
-    (for*/list ((j (in-range (ymin lane) (ymax lane)))
-                (i (in-range (xmin lane) (+ (xmax lane) 1)))
-                (k (in-range (zmin lane) (+ (zmax lane) 1)))
-                #:when (model-voxel-full? target-model i j k))
-      (begin0
-        (append (compile-move (bot-pos bot) (make-c i (+ j 1) k)
-                              lane '())
-                (list '(fill (0 -1 0))))
-        (set-bot-pos! bot (make-c i (+ j 1) k))))))
+  ;; We treat the assembly area as a set of 3x3 towers, with each tower
+  ;; constructed in layers.  At each stop, the bot can fill the ring
+  ;; around it in the same layer, as well as the center of the layer below.
+  (define offsets '((1 0 0) (1 0 1) (0 0 1) (-1 0 1)
+                            (-1 0 0) (-1 0 -1) (0 0 -1) (1 0 -1)
+                            (0 -1 0)))
+  (define x-stops
+    (append (range (+ (xmin lane) 1) (+ (xmax lane) 1) 3)
+            (if (= (remainder (- (xmax lane) (xmin lane)) 3) 0)
+              (list (xmax lane))
+              '())))
+  (define z-stops
+    (append (range (+ (zmin lane) 1) (+ (zmax lane) 1) 3)
+            (if (= (remainder (- (zmax lane) (zmin lane)) 3) 0)
+              (list (zmax lane))
+              '())))
+  (define almost-everything
+    (apply
+      append
+      (for*/list ((k z-stops)
+                  (i x-stops)
+                  (j (in-range (ymin lane)
+                               (+ (ymax lane) 1))))
+        (define to-fill
+          (filter (lambda (nd)
+                    (let ((c (c+ (make-c i j k) nd)))
+                      (and (region-includes? lane c)
+                           (model-voxel-full? target-model
+                                              (x c) (y c) (z c)))))
+                  offsets))
+        (if (empty? to-fill)
+          '()
+          (begin0
+            (append (compile-move (bot-pos bot) (make-c i j k)
+                                  lane '())
+                    (map (lambda (nd) `(fill ,nd)) to-fill))
+            (set-bot-pos! bot (make-c i j k)))))))
+  ;; We need to ensure that the bot will have a clear Z-X-Y move to its
+  ;; next waypoint, so we move to the top of the lane.
+  (define pos (bot-pos bot))
+  (define end-pos (make-c (x pos) (ymax lane) (z pos)))
+  (set-bot-pos! bot end-pos)
+  (append almost-everything
+          (compile-move pos end-pos lane '())))
 
 
 (define (compile-plan plan source-model target-model num-seeds)
