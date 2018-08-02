@@ -15,7 +15,7 @@
 (define sample-problems : (Listof Natural)
   '(1 23 50 67 115 121 131 173))
 
-(define strategy strategy-slice-and-dice)
+(define default-strategy strategy-slice-and-dice)
 
 (: solve-all (-> Void))
 (define (solve-all)
@@ -26,7 +26,7 @@
            (target-model (load-model target-filename))
            (res (model-res target-model))
            (source-model (create-model res))
-           (plan (strategy num-seeds source-model target-model))
+           (plan (default-strategy num-seeds source-model target-model))
            (trace (compile-plan plan source-model target-model num-seeds))
            (trace-filename
              (format "solnsF/FA~a_soln.nbt"
@@ -52,8 +52,9 @@
         (printf "Failure: final model does not match target.~n")))))
 
 
-(solve-all)
-;(printf "Balanced slices~n")
-;(solve-and-run sample-problems strategy-balanced-slices)
-;(printf "Slice-n-dice~n")
-;(solve-and-run sample-problems strategy-slice-and-dice)
+(let ((args (current-command-line-arguments)))
+  (cond ((and (= (vector-length args) 1)
+              (string=? (vector-ref args 0) "--all"))
+         (solve-all))
+        (else
+          (solve-and-run sample-problems default-strategy))))
