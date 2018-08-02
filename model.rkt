@@ -105,14 +105,23 @@
 (define (model-bounding-box m)
   (define res (model-res m))
   (define-values (xmin xmax ymin ymax zmin zmax)
-    (for*/fold ([xmin : Integer res]
-                [xmax : Integer 0]
-                [ymin : Integer res]
-                [ymax : Integer 0]
-                [zmin : Integer res]
-                [zmax : Integer 0])
-      ((i res) (j res) (k res)
-               #:when (model-voxel-full? m (c i j k)))
+    (for/fold ([xmin : Integer res]
+               [xmax : Integer 0]
+               [ymin : Integer res]
+               [ymax : Integer 0]
+               [zmin : Integer res]
+               [zmax : Integer 0])
+      ((i res)
+       (irr (in-range 0 (* res res res) (* res res)))
+       #:when #t
+       (j res)
+       (jr (in-range 0 (* res res) res))
+       #:when #t
+       (k res)
+       #:when (let* ((u (+ irr jr k))
+                     (s (arithmetic-shift u -3))
+                     (t (bitwise-and u 7)))
+                (bitwise-bit-set? (bytes-ref (model-bits m) s) t)))
       (values (min xmin i) (max xmax i)
               (min ymin j) (max ymax j)
               (min zmin k) (max zmax k))))
