@@ -94,9 +94,9 @@
               pos2 m
               (append (make-plan-slice-and-dice (cast (- n m 1) Natural)
                                                 lane1 res weights-xz)
-                      (list (move-to (c (x pos1) (- res 1) (z pos1)))))
+                      (list (move-to (c (x pos1) (ymax lane) (z pos1)))))
               (append (make-plan-slice-and-dice m lane2 res weights-xz)
-                      (list (move-to (c (x pos2) (- res 1) (z pos2))))))))))))
+                      (list (move-to (c (x pos2) (ymax lane) (z pos2))))))))))))
 
 
 ;; Divides the space into roughly equal-weight XZ areas and assigns a bot
@@ -110,21 +110,14 @@
         (for/sum : Integer
           ((j res) #:when (model-voxel-full? target (c i j k)))
           1))))
-  (define-values (xmin xmax ymax zmin zmax)  ; ymin is always 0
-    (for*/fold ([xmin : Integer res]
-                [xmax : Integer 0]
-                [ymax : Integer 0]
-                [zmin : Integer res]
-                [zmax : Integer 0])
-      ((i res) (j res) (k res)
-               #:when (model-voxel-full? target (c i j k)))
-      (values (min xmin i) (max xmax i)
-              (max ymax j)
-              (min zmin k) (max zmax k))))
-  (define lane (region (c xmin 0 zmin)
-                       (c xmax ymax zmax)))
-  (append (make-plan-slice-and-dice num-seeds lane res weights-xz)
-          (list (move-to (c 0 0 0)))))
+  (define bb (model-bounding-box target))
+  ;; Leave a free plane on top for movement.
+  (define lane (region (c (xmin bb) (ymin bb) (zmin bb))
+                       (c (xmax bb) (+ (ymax bb) 1) (zmax bb))))
+  (list (with-lane
+          lane
+          (make-plan-slice-and-dice num-seeds lane res weights-xz))
+        (move-to (c 0 0 0))))
 
 
 ;; Helper for strategy-balanced-slices

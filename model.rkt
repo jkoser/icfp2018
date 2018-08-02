@@ -12,7 +12,8 @@
          model-res
          model-voxel-full?
          model-voxel-fill!
-         model-voxel-void!)
+         model-voxel-void!
+         model-bounding-box)
 
 ;; A model is represented as a resolution R and a bit vector, indexed as
 ;; X * R * R + Y * R + Z, where set bits represent filled voxels.  Bits are
@@ -99,3 +100,21 @@
                 i
                 (bitwise-and (bytes-ref (model-bits m) i)
                              (bitwise-not (arithmetic-shift 1 j))))))
+
+(: model-bounding-box (-> model Region))
+(define (model-bounding-box m)
+  (define res (model-res m))
+  (define-values (xmin xmax ymin ymax zmin zmax)
+    (for*/fold ([xmin : Integer res]
+                [xmax : Integer 0]
+                [ymin : Integer res]
+                [ymax : Integer 0]
+                [zmin : Integer res]
+                [zmax : Integer 0])
+      ((i res) (j res) (k res)
+               #:when (model-voxel-full? m (c i j k)))
+      (values (min xmin i) (max xmax i)
+              (min ymin j) (max ymax j)
+              (min zmin k) (max zmax k))))
+  (region (c xmin ymin zmin)
+          (c xmax ymax zmax)))

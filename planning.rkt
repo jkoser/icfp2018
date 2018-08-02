@@ -55,7 +55,14 @@
    [num-seeds : Natural]
    [parent-plan : Plan]
    [child-plan : Plan]))
-(define-type PlanCmd (Union move-to assemble-in-lane spawn))
+(struct with-lane
+  ([lane : Region]
+   [body : Plan]))
+(define-type PlanCmd
+             (Union move-to
+                    assemble-in-lane
+                    spawn
+                    with-lane))
 (define-type Plan (Listof PlanCmd))
 
 
@@ -273,7 +280,9 @@
               (list (cons (bot-bid bot)
                           (fusionp (c- (bot-pos bot2) (bot-pos bot)))))
               (list (cons (bot-bid bot2)
-                          (fusions (c- (bot-pos bot) (bot-pos bot2)))))))))))
+                          (fusions (c- (bot-pos bot) (bot-pos bot2)))))))))
+      ((with-lane lane body)
+       (compile-cmds body bot lane))))
 
   (let* ((res (model-res source-model))
          (bot (create-first-bot num-seeds))
