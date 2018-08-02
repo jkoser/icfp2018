@@ -1,4 +1,4 @@
-#lang racket
+#lang typed/racket
 
 (require "model.rkt")
 (require "state.rkt")
@@ -12,8 +12,12 @@
 (define num-disassembly-problems 186)
 (define num-reassembly-problems 115)
 
+(define sample-problems : (Listof Natural)
+  '(1 23 50 67 115 121 131 173))
+
 (define strategy strategy-slice-and-dice)
 
+(: solve-all (-> Void))
 (define (solve-all)
   (for ((n (in-range 1 (+ num-assembly-problems 1))))
     (let* ((target-filename
@@ -29,7 +33,8 @@
                      (~a n #:width 3 #:align 'right #:pad-string "0"))))
       (save-trace! trace-filename trace))))
 
-(define (solve-and-run problems)
+(: solve-and-run (-> (Listof Natural) Strategy Void))
+(define (solve-and-run problems strategy)
   (for ((n problems))
     (let* ((target-filename
              (format "problemsF/FA~a_tgt.mdl"
@@ -46,5 +51,9 @@
         (printf "Success.  Energy used = ~a~n" (system-energy system))
         (printf "Failure: final model does not match target.~n")))))
 
-;(solve-all)
-(solve-and-run '(1 23 50 67))
+
+(solve-all)
+;(printf "Balanced slices~n")
+;(solve-and-run sample-problems strategy-balanced-slices)
+;(printf "Slice-n-dice~n")
+;(solve-and-run sample-problems strategy-slice-and-dice)

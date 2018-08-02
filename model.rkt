@@ -1,9 +1,10 @@
-#lang racket
+#lang typed/racket
 
-(require (only-in srfi/60
-                  bit-count))
+(require "coords.rkt")
 
-(provide load-model
+(provide Res
+         model
+         load-model
          load-problem-model
          create-model
          copy-model
@@ -13,23 +14,39 @@
          model-voxel-fill!
          model-voxel-void!)
 
-;; A model is represented as a bit vector with indexes X * R * R + Y * R + Z,
-;; where set bits represent filled voxels.  Bits are packed into a byte vector,
-;; with 8 bits per byte.
+;; A model is represented as a resolution R and a bit vector, indexed as
+;; X * R * R + Y * R + Z, where set bits represent filled voxels.  Bits are
+;; packed into a byte vector, with 8 bits per byte.
 
-(define-struct model (res bits))
+(define-type Res Index)
+(define-struct model ([res : Res] [bits : Bytes]))
 
+
+(: bit-count (-> Byte Integer))
+(define (bit-count b)
+  (let* ((b2 (+ (bitwise-and b #x55)
+                (bitwise-and (arithmetic-shift b -1) #x55)))
+         (b4 (+ (bitwise-and b2 #x33)
+                (bitwise-and (arithmetic-shift b2 -2) #x33)))
+         (b8 (+ (bitwise-and b4 #x0f)
+                (bitwise-and (arithmetic-shift b4 -4) #x0f))))
+    b8))
+
+(: load-model (-> String model))
 (define (load-model filename)
+  (: pct-filled (-> Res Bytes Real))
   (define (pct-filled res bits)
-    (* (/ (for/sum ((b bits))
-            (bit-count b))
+    (* (/ (for/sum : Integer ((b : Byte bits))
+              (bit-count b))
           (* res res res))
        100.0))
   (call-with-input-file
     filename
-    (lambda (in)
+    (lambda ([in : Input-Port])
       (let ((res (read-byte in))
             (bits (port->bytes in)))
+        (when (eof-object? res)
+          (error "empty file"))
         (printf "Loaded ~a: res=~a, ~a% full, ~a bytes.~n"
                 filename
                 res
@@ -37,39 +54,47 @@
                 (bytes-length bits))
         (make-model res bits)))))
 
+(: load-problem-model (-> Natural model))
 (define (load-problem-model n)
   (load-model (format "problemsL/LA~a_tgt.mdl"
                       (~a n #:width 3 #:align 'right #:pad-string "0"))))
 
+(: create-model (-> Res model))
 (define (create-model res)
   (make-model res
               (make-bytes (ceiling (/ (* res res res) 8)) 0)))
 
+(: copy-model (-> model model))
 (define (copy-model m)
   (make-model (model-res m)
               (bytes-copy (model-bits m))))
 
+(: model=? (-> model model Boolean))
 (define (model=? m1 m2)
   (and (= (model-res m1) (model-res m2))
        (equal? (model-bits m1) (model-bits m2))))
 
-(define (model-bit-index m x y z)
-  (let ((r (model-res m)))
-    (quotient/remainder (+ (* x r r) (* y r) z) 8)))
+(: model-bit-index (-> model Coord (Values Integer Fixnum)))
+(define (model-bit-index m p)
+  (let ((r : Res (model-res m)))
+    (quotient/remainder (+ (* (x p) r r) (* (y p) r) (z p)) 8)))
 
-(define (model-voxel-full? m x y z)
-  (let-values (((i j) (model-bit-index m x y z)))
+(: model-voxel-full? (-> model Coord Boolean))
+(define (model-voxel-full? m p)
+  (let-values (((i j) (model-bit-index m p)))
     (bitwise-bit-set? (bytes-ref (model-bits m) i) j)))
 
-(define (model-voxel-fill! m x y z)
-  (let-values (((i j) (model-bit-index m x y z)))
+(: model-voxel-fill! (-> model Coord Void))
+(define (model-voxel-fill! m p)
+  (let-values (((i j) (model-bit-index m p)))
     (bytes-set! (model-bits m)
                 i
                 (bitwise-ior (bytes-ref (model-bits m) i)
                              (arithmetic-shift 1 j)))))
 
-(define (model-voxel-void! m x y z)
-  (let-values (((i j) (model-bit-index m x y z)))
+(: model-voxel-void! (-> model Coord Void))
+(define (model-voxel-void! m p)
+  (let-values (((i j) (model-bit-index m p)))
     (bytes-set! (model-bits m)
                 i
                 (bitwise-and (bytes-ref (model-bits m) i)

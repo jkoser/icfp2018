@@ -1,100 +1,118 @@
-#lang racket
+#lang typed/racket
 
 (provide (all-defined-out))
 
-;; Coordinates are represented as 3-lists
-(define (make-c x y z)
-  (list x y z))
-(define x first)
-(define y second)
-(define z third)
+;; Coordinates
+(struct c ([x : Integer] [y : Integer] [z : Integer]) #:transparent)
+(define x c-x)
+(define y c-y)
+(define z c-z)
+(define-type Coord c)
 
-;; Coordinate diffs are represented as 3-lists
-(define (make-d x y z)
-  (list x y z))
-(define dx first)
-(define dy second)
-(define dz third)
+;; Coordinate differences
+(struct d ([x : Integer] [y : Integer] [z : Integer]) #:transparent)
+(define dx d-x)
+(define dy d-y)
+(define dz d-z)
+(define-type CoordDiff d)
 
-;; Regions are represented as 2-lists of coordinates, normalized so
-;; we can use equal? to compare.
-(define (make-region c1 c2)
-  (list (make-c (min (x c1) (x c2))
-                (min (y c1) (y c2))
-                (min (z c1) (z c2)))
-        (make-c (max (x c1) (x c2))
-                (max (y c1) (y c2))
-                (max (z c1) (z c2)))))
+;; Regions are represented as pairs of coordinates, normalized so we can
+;; use equal? to compare.
+(define-type Region (Pairof Coord Coord))
+(: region (-> Coord Coord Region))
+(define (region c1 c2)
+  (cons (c (min (x c1) (x c2))
+           (min (y c1) (y c2))
+           (min (z c1) (z c2)))
+        (c (max (x c1) (x c2))
+           (max (y c1) (y c2))
+           (max (z c1) (z c2)))))
 
-(define (xmin r) (x (first r)))
-(define (xmax r) (x (second r)))
-(define (ymin r) (y (first r)))
-(define (ymax r) (y (second r)))
-(define (zmin r) (z (first r)))
-(define (zmax r) (z (second r)))
+(: xmin (-> Region Integer))
+(define (xmin r) (x (car r)))
+(: xmax (-> Region Integer))
+(define (xmax r) (x (cdr r)))
+(: ymin (-> Region Integer))
+(define (ymin r) (y (car r)))
+(: ymax (-> Region Integer))
+(define (ymax r) (y (cdr r)))
+(: zmin (-> Region Integer))
+(define (zmin r) (z (car r)))
+(: zmax (-> Region Integer))
+(define (zmax r) (z (cdr r)))
 
+(: region-below-x (-> Region Integer Region))
 (define (region-below-x r x)
-  (make-region (first r)
-               (make-c (min x (xmax r)) (ymax r) (zmax r))))
+  (region (car r)
+          (c (min x (xmax r)) (ymax r) (zmax r))))
 
+(: region-above-x (-> Region Integer Region))
 (define (region-above-x r x)
-  (make-region (make-c (max x (xmin r)) (ymin r) (zmin r))
-               (second r)))
+  (region (c (max x (xmin r)) (ymin r) (zmin r))
+          (cdr r)))
 
+(: region-below-y (-> Region Integer Region))
 (define (region-below-y r y)
-  (make-region (first r)
-               (make-c (xmax r) (min y (ymax r)) (zmax r))))
+  (region (car r)
+          (c (xmax r) (min y (ymax r)) (zmax r))))
 
+(: region-above-y (-> Region Integer Region))
 (define (region-above-y r y)
-  (make-region (make-c (xmin r) (max y (ymin r)) (zmin r))
-               (second r)))
+  (region (c (xmin r) (max y (ymin r)) (zmin r))
+          (cdr r)))
 
+(: region-below-z (-> Region Integer Region))
 (define (region-below-z r z)
-  (make-region (first r)
-               (make-c (xmax r) (ymax r) (min z (zmax r)))))
+  (region (car r)
+          (c (xmax r) (ymax r) (min z (zmax r)))))
 
+(: region-above-z (-> Region Integer Region))
 (define (region-above-z r z)
-  (make-region (make-c (xmin r) (ymin r) (max z (zmin r)))
-               (second r)))
+  (region (c (xmin r) (ymin r) (max z (zmin r)))
+          (cdr r)))
 
-(define (region-includes? r c)
-  (and (<= (xmin r) (x c) (xmax r))
-       (<= (ymin r) (y c) (ymax r))
-       (<= (zmin r) (z c) (zmax r))))
+(: region-includes? (-> Region Coord Boolean))
+(define (region-includes? r p)
+  (and (<= (xmin r) (x p) (xmax r))
+       (<= (ymin r) (y p) (ymax r))
+       (<= (zmin r) (z p) (zmax r))))
 
 ;; Region dimension
+(: dim (-> Region Nonnegative-Integer))
 (define (dim r)
-  (+ (if (= (x (first r)) (x (second r))) 0 1)
-     (if (= (y (first r)) (y (second r))) 0 1)
-     (if (= (z (first r)) (z (second r))) 0 1)))
+  (+ (if (= (xmin r) (xmax r)) 0 1)
+     (if (= (ymin r) (ymax r)) 0 1)
+     (if (= (zmin r) (zmax r)) 0 1)))
 
-;; Some possibly helpful units
-(define up '(0 1 0))
-(define down '(0 -1 0))
-(define north '(0 0 1))
-(define south '(0 0 -1))
-(define east '(1 0 0))
-(define west '(-1 0 0))
+(: c+ (-> Coord CoordDiff Coord))
+(define (c+ p q)
+  (c (+ (x p) (dx q))
+     (+ (y p) (dy q))
+     (+ (z p) (dz q))))
 
-(define (c+ c d)
-  (map + c d))
-
-(define (c- c1 c2)
-  (map - c1 c2))
+(: c- (-> Coord Coord CoordDiff))
+(define (c- p q)
+  (d (- (x p) (x q))
+     (- (y p) (y q))
+     (- (z p) (z q))))
 
 ;; Manhattan length
-(define (mlen d)
-  (apply + (map abs d)))
+(: mlen (-> CoordDiff Nonnegative-Integer))
+(define (mlen q)
+  (+ (abs (dx q)) (abs (dy q)) (abs (dz q))))
 
 ;; Chessboard length
-(define (clen d)
-  (apply max (map abs d)))
+(: clen (-> CoordDiff Nonnegative-Integer))
+(define (clen q)
+  (max (abs (dx q)) (abs (dy q)) (abs (dz q))))
 
 ;; Adjacency
+(: adj? (-> Coord Coord Boolean))
 (define (adj? c1 c2)
   (= (mlen (c- c1 c2)) 1))
 
 ;; Linear coordinate diff
+(: ld? (-> CoordDiff Boolean))
 (define (ld? d)
   (let ((ml (mlen d))
         (cl (clen d)))
@@ -103,22 +121,26 @@
 
 ;; Short linear coordinate diff
 (define SLD-MAX 5)
+(: sld? (-> CoordDiff Boolean))
 (define (sld? d)
   (and (ld? d)
        (<= (mlen d) SLD-MAX)))
 
 ;; Long linear coordinate diff
 (define LLD-MAX 15)
+(: lld? (-> CoordDiff Boolean))
 (define (lld? d)
   (and (ld? d)
        (<= (mlen d) LLD-MAX)))
 
 ;; Near coordinate diff
+(: nd? (-> CoordDiff Boolean))
 (define (nd? d)
   (and (<= 1 (mlen d) 2)
        (= (clen d) 1)))
 
 ;; Far coordinate diff
 (define FD-MAX 30)
+(: fd? (-> CoordDiff Boolean))
 (define (fd? d)
   (<= 1 (clen d) FD-MAX))
