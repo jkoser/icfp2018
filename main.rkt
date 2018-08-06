@@ -51,10 +51,32 @@
         (printf "Success.  Energy used = ~a~n" (system-energy system))
         (printf "Failure: final model does not match target.~n")))))
 
+(: run-baseline (-> (Listof Natural) Void))
+(define (run-baseline problems)
+  (for ((n problems))
+    (let* ((target-filename
+             (format "problemsF/FA~a_tgt.mdl"
+                     (~a n #:width 3 #:align 'right #:pad-string "0")))
+           (target-model (load-model target-filename))
+           (res (model-res target-model))
+           (source-model (create-model res))
+           (trace-filename
+             (format "dfltTracesF/FA~a.nbt"
+                     (~a n #:width 3 #:align 'right #:pad-string "0")))
+           (trace (load-trace trace-filename))
+           (system (create-system res num-seeds trace)))
+      (printf "Running baseline...\n")
+      (run-system! system)
+      (if (model=? (system-model system) target-model)
+        (printf "Success.  Energy used = ~a~n" (system-energy system))
+        (printf "Failure: final model does not match target.~n")))))
 
 (let ((args (current-command-line-arguments)))
   (cond ((and (= (vector-length args) 1)
               (string=? (vector-ref args 0) "--all"))
          (solve-all))
+        ((and (= (vector-length args) 1)
+              (string=? (vector-ref args 0) "--baseline"))
+         (run-baseline sample-problems))
         (else
           (solve-and-run sample-problems default-strategy))))
