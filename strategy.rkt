@@ -5,6 +5,7 @@
 (require "planning.rkt")
 
 (provide Strategy
+         strategies-by-name
          strategy-assemble-in-slices
          strategy-balanced-slices
          strategy-slice-and-dice)
@@ -196,3 +197,10 @@
                             (- (model-res source) 2)
                             (model-res source))
           (list (move-to (c 0 0 0)))))
+
+
+(: strategies-by-name (Listof (Pairof String Strategy)))
+(define strategies-by-name
+  `(("assemble-in-slices" . ,strategy-assemble-in-slices)
+    ("balanced-slices" . ,strategy-balanced-slices)
+    ("slice-and-dice" . ,strategy-slice-and-dice)))
