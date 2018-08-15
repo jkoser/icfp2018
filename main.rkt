@@ -34,8 +34,13 @@
 
 (define sample-problems
   (map string->problem
-       '("A001" "D001" "R001" "A023" "A050" "A067"
-         "A115" "A131" "A173")))
+       '("A001" "D001" "R001"  ; smoke test
+         "A023" "A050" "A067"  ; assembly
+         "A115" "A131" "A173"
+         "D023" "D050" "D067"  ; disassembly
+         "D115" "D131" "D173"
+         "R019" "R035" "R050"  ; reassembly
+         "R068" "R075" "R111")))
 
 (define all-problems
   (append (for/list : (Listof problem) ((i num-assembly-problems))
@@ -85,7 +90,11 @@
                                   (write-trace-files? #t)]
     [("-d" "--directory") #{dir : String}
                           "Directory for use with -r or -w"
-                          (selected-directory dir)])
+                          (selected-directory dir)]
+    #:args args
+    (when (not (empty? args))
+      (printf "Warning: ignoring unexpected arguments: ~a~n" args))
+    (void))
 
   ;; Validate/interpret options
   (define strategy-fn : Strategy
