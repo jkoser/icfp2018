@@ -19,9 +19,16 @@
  (move-to (c 0 0 0)))
 
 ;; The assemble-in-lane instruction reserves one plane for movement,
-;; and does not fill any voxels in that plane.  (The above plan uses the
-;; property that well-formed models have empty side faces, so the bot
-;; can freely return to the origin.)
+;; and does not fill any voxels in that plane.  After the instruction
+;; has been executed, the bot will be located within the free plane.
+;; (The above plan uses the property that well-formed models have empty
+;; side faces, so the bot can freely return to the origin.)
+
+;; The corresponding disassemble-in-lane instruction also reserves one
+;; plane for movement, and additionally requires that the bot be located
+;; within the free plane to start.  The ending location is within the
+;; lane, but otherwise unspecified, as movement within the lane is
+;; obstacle-free.
 
 ;; Plans use a restricted fission/fusion pattern: a bot that is spawned
 ;; in a fission must eventually fuse with its parent.  Fission must
@@ -50,6 +57,8 @@
 (define-type FreePlane (Union 'top))
 (struct assemble-in-lane
   ([free-plane : FreePlane]))
+(struct disassemble-in-lane
+  ([free-plane : FreePlane]))
 (struct spawn
   ([child-pos : Coord]
    [num-seeds : Natural]
@@ -61,9 +70,15 @@
 (define-type PlanCmd
              (Union move-to
                     assemble-in-lane
+                    disassemble-in-lane
                     spawn
                     with-lane))
 (define-type Plan (Listof PlanCmd))
+
+
+;; The following trace-related types are used internally.
+(define-type SimpleCmd (Union wait smove lmove sfill svoid))
+(define-type SimpleTrace (Listof SimpleCmd))
 
 
 ;; Returns the new lanes as two values, with the first value
@@ -151,10 +166,28 @@
               trace)))
 
 
+;; Given a single-bot trace, with no fission or fusion, produces a trace
+;; that does the complete opposite of the given one.
+(: reverse-trace (-> SimpleTrace SimpleTrace))
+(define (reverse-trace trace)
+  (reverse
+    (map (match-lambda
+           ((wait) (wait))
+           ((smove lld)
+            (smove (d-neg lld)))
+           ((lmove sld1 sld2)
+            (lmove (d-neg sld2) (d-neg sld1)))
+           ((sfill nd)
+            (svoid nd))
+           ((svoid nd)
+            (sfill nd)))
+         trace)))
+
+
 ;; Produces a list of commands to move from pos to dest, which must be
 ;; in the given lane.  The current implementation assumes a clear path
 ;; along the Z, then X, then Y dimensions.
-(: compile-move (-> Coord Coord Region (Listof Cmd) Trace))
+(: compile-move (-> Coord Coord Region (Listof SimpleCmd) SimpleTrace))
 (define (compile-move pos dest lane acc)
   (if (equal? pos dest)
     (reverse acc)
@@ -179,13 +212,15 @@
                     (cons (smove step) acc)))))
 
 
-;; Produces a list of commands the bot can follow to assemble the part
-;; of the target model within the given lane.  As a side effect, updates
-;; the bot's position.
-(: compile-assemble-in-lane (-> bot Region FreePlane model Trace))
-(define (compile-assemble-in-lane bot lane free-plane target-model)
+;; Produces a list of commands a bot with the given starting position
+;; can follow to assemble the part of the target model within the given
+;; lane.  As a second value, returns the final position.
+(: compile-assemble-in-lane (-> Coord Region FreePlane model
+                                (Values SimpleTrace Coord)))
+(define (compile-assemble-in-lane start-pos lane free-plane target-model)
   (when (not (equal? free-plane 'top))
     (error "assemble-in-lane only implemented for top" free-plane))
+
   ;; We treat the assembly area as a set of 3x3 towers, with each tower
   ;; constructed in layers.  At each stop, the bot can fill the ring
   ;; around it in the same layer, as well as the center of the layer below.
@@ -202,11 +237,13 @@
             (if (= (remainder (- (zmax lane) (zmin lane)) 3) 0)
               (list (zmax lane))
               '())))
-  (define almost-everything
+  (define pos start-pos) ; updated via assignment
+
+  (define build-towers : SimpleTrace
     (apply
       append
-      (for*/list : (Listof Trace) ((k z-stops) (i x-stops))
-        (define make-tower : (Listof Trace)
+      (for*/list : (Listof SimpleTrace) ((k z-stops) (i x-stops))
+        (define build-tower-stops : (Listof SimpleTrace)
           (for/list ((j (in-range (ymin lane)
                                   (+ (ymax lane) 1))))
             (define stop-pos (c i j k))
@@ -219,30 +256,45 @@
             (if (empty? to-fill)
               '()
               (begin0
-                (append (compile-move (bot-pos bot) stop-pos
+                (append (compile-move pos stop-pos
                                       lane '())
                         (map (lambda (nd) (sfill nd)) to-fill))
-                (set-bot-pos! bot stop-pos)))))
+                (set! pos stop-pos)))))
         ;; Ensure a clear Z-X-Y move to the base of the next tower.
-        (let ((pos-x1 (c+ (bot-pos bot) (d 1 0 0)))
-              (pos-z1 (c+ (bot-pos bot) (d 0 0 1))))
+        (let ((pos-x1 (c+ pos (d 1 0 0)))
+              (pos-z1 (c+ pos (d 0 0 1))))
           (if (or (and (region-includes? lane pos-x1)
                        (model-voxel-full? target-model pos-x1))
                   (and (region-includes? lane pos-z1)
                        (model-voxel-full? target-model pos-z1)))
             (begin0
-              (append (apply append make-tower)
+              (append (apply append build-tower-stops)
                       (list (smove (d 0 1 0))))
-              (set-bot-pos! bot (c+ (bot-pos bot) (d 0 1 0))))
-            (apply append make-tower))))))
+              (set! pos (c+ pos (d 0 1 0))))
+            (apply append build-tower-stops))))))
+
   ;; We need to ensure that the bot will have a clear Z-X-Y move to its
   ;; next waypoint, so we move to the top of the lane.
-  (define pos (bot-pos bot))
   (define end-pos (c (x pos) (ymax lane) (z pos)))
-  (set-bot-pos! bot end-pos)
-  (append almost-everything
-          (compile-move pos end-pos lane '())))
+  (values
+   (append build-towers
+           (compile-move pos end-pos lane '()))
+   end-pos))
 
+;; Produces a list of commands a bot with the given starting position
+;; can follow to disassemble the part of the target model within the given
+;; lane.  As a second value, returns the final position.
+(: compile-disassemble-in-lane (-> Coord Region FreePlane model
+                                   (Values SimpleTrace Coord)))
+(define (compile-disassemble-in-lane start-pos lane free-plane source-model)
+  (when (not (equal? free-plane 'top))
+    (error "disassemble-in-lane only implemented for top" free-plane))
+  (define end-pos (c (xmin lane) (ymin lane) (zmin lane)))
+  (define-values (a-trace waypoint-pos)
+    (compile-assemble-in-lane end-pos lane free-plane source-model))
+  (values (append (compile-move start-pos waypoint-pos lane '())
+                  (reverse-trace a-trace))
+          end-pos))
 
 (: compile-plan (-> Plan model model Natural Trace))
 (define (compile-plan plan source-model target-model num-seeds)
@@ -262,9 +314,17 @@
          (set-bot-pos! bot dest)
          trace))
       ((assemble-in-lane free-plane)
-       (tag-trace (compile-assemble-in-lane
-                    bot lane free-plane target-model)
-                  (bot-bid bot)))
+       (let-values (((trace end-pos)
+                     (compile-assemble-in-lane (bot-pos bot) lane
+                                               free-plane target-model)))
+         (set-bot-pos! bot end-pos)
+         (tag-trace trace (bot-bid bot))))
+      ((disassemble-in-lane free-plane)
+       (let-values (((trace end-pos)
+                     (compile-disassemble-in-lane (bot-pos bot) lane
+                                                  free-plane source-model)))
+         (set-bot-pos! bot end-pos)
+         (tag-trace trace (bot-bid bot))))
       ((spawn pos2 num-seeds p-plan c-plan)
        (let*-values (((pos1) (bot-pos bot))
                      ((lane1 lane2) (lane-split lane pos1 pos2))

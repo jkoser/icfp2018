@@ -77,6 +77,15 @@
        (<= (ymin r) (y p) (ymax r))
        (<= (zmin r) (z p) (zmax r))))
 
+(: region-union-bounding-box (-> Region Region Region))
+(define (region-union-bounding-box r1 r2)
+  (cons (c (min (xmin r1) (xmin r2))
+           (min (ymin r1) (ymin r2))
+           (min (zmin r1) (zmin r2)))
+        (c (max (xmax r1) (xmax r2))
+           (max (ymax r1) (ymax r2))
+           (max (zmax r1) (zmax r2)))))
+
 ;; Region dimension
 (: dim (-> Region Nonnegative-Integer))
 (define (dim r)
@@ -95,6 +104,10 @@
   (d (- (x p) (x q))
      (- (y p) (y q))
      (- (z p) (z q))))
+
+(: d-neg (-> CoordDiff CoordDiff))
+(define (d-neg q)
+  (d (- (dx q)) (- (dy q)) (- (dz q))))
 
 ;; Manhattan length
 (: mlen (-> CoordDiff Nonnegative-Integer))

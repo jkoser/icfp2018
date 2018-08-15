@@ -42,11 +42,11 @@
    [time : Natural])
   #:transparent #:mutable)
 
-(: create-system (-> Res Natural Trace system))
-(define (create-system res num-seeds trace)
+(: create-system (-> model Natural Trace system))
+(define (create-system model num-seeds trace)
   (make-system 0
                'low
-               (create-model res)
+               model
                (list (create-first-bot num-seeds))
                trace
                0))

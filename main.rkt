@@ -11,12 +11,39 @@
 
 (define num-seeds 39)
 
-(define num-assembly-problems 186)  ; currently only assembly is supported
+(define num-assembly-problems 186)
 (define num-disassembly-problems 186)
 (define num-reassembly-problems 115)
 
-(define sample-problems : (Listof Natural)
-  '(1 23 50 67 115 121 131 173))
+(define-type ProblemType (Union 'a 'd 'r))
+(struct problem ([type : ProblemType]
+                 [number : Natural]))
+
+(: problem->string (-> problem String))
+(define (problem->string p)
+  (string-append (string-upcase (symbol->string (problem-type p)))
+                 (~a (problem-number p)
+                     #:width 3 #:align 'right #:pad-string "0")))
+
+(: string->problem (-> String problem))
+(define (string->problem s)
+  (problem (cast (string->symbol (string-downcase (substring s 0 1)))
+                 ProblemType)
+           (cast (string->number (substring s 1))
+                 Positive-Integer)))
+
+(define sample-problems
+  (map string->problem
+       '("A001" "D001" "R001" "A023" "A050" "A067"
+         "A115" "A131" "A173")))
+
+(define all-problems
+  (append (for/list : (Listof problem) ((i num-assembly-problems))
+            (problem 'a (+ i 1)))
+          (for/list : (Listof problem) ((i num-disassembly-problems))
+            (problem 'd (+ i 1)))
+          (for/list : (Listof problem) ((i num-reassembly-problems))
+            (problem 'r (+ i 1)))))
 
 (define run-only? : (Parameterof Boolean)
   (make-parameter #f))
@@ -49,7 +76,8 @@
                     (all-problems? #t)]
     [("-p" "--problems") #{ps : String}
                          ("Iterate over only the specified problems"
-                          "(<ps> is a comma-separated list of numbers)")
+                          "(<ps> is a comma-separated list of problem"
+                          "codes like A001,D023,R050)")
                          (selected-problems ps)]
     #:once-each
     [("-w" "--write-trace-files") ("Write solutions to files in given directory"
@@ -63,16 +91,12 @@
   (define strategy-fn : Strategy
     (cdr (or (assoc (selected-strategy) strategies-by-name)
              (error "unknown strategy" (selected-strategy)))))
-  (define problems : (Sequenceof Natural)
+  (define problems : (Listof problem)
     (let ((selected (selected-problems)))  ; for the type-checker
       (cond ((all-problems?)
-             (in-range 1 (+ num-assembly-problems 1)))
+             all-problems)
             (selected
-              (map (compose (lambda ([x : (Union Number False)]) : Natural
-                              (if (and (exact-integer? x) (>= x 1))
-                                x
-                                (error "not a problem number" x)))
-                            string->number)
+              (map string->problem
                    (string-split selected ",")))
             (else
               sample-problems))))
@@ -89,32 +113,35 @@
     (make-directory directory))
 
   ;; Generate and/or run a trace for each selected problem
-  (for ((n problems))
-    (define target-filename
-      (format "problemsF/FA~a_tgt.mdl"
-              (~a n #:width 3 #:align 'right #:pad-string "0")))
-    (define target-model (load-model target-filename))
-    (define res (model-res target-model))
-    (define source-model (create-model res))
+  (for ((p problems))
+    (define source-model : (Option model)
+      (and (not (eq? (problem-type p) 'a))
+           (load-model (format "problemsF/F~a_src.mdl" (problem->string p)))))
+    (define target-model : (Option model)
+      (and (not (eq? (problem-type p) 'd))
+           (load-model (format "problemsF/F~a_tgt.mdl" (problem->string p)))))
+    (define res (model-res (or source-model target-model
+                               (error "never reached"))))
     (define trace
       (if (run-only?)
-        (let ((trace-filename
-                (format "~a/FA~a.nbt"
-                        directory
-                        (~a n #:width 3 #:align 'right #:pad-string "0"))))
-          (load-trace trace-filename))
+        (load-trace (format "~a/F~a.nbt" directory (problem->string p)))
         (let ((plan (strategy-fn num-seeds source-model target-model)))
-          (compile-plan plan source-model target-model num-seeds))))
-    (define system (create-system res num-seeds trace))
+          (compile-plan plan 
+                        (or source-model (create-model res))
+                        (or target-model (create-model res))
+                        num-seeds))))
+    (define system
+      (create-system (if source-model
+                       (copy-model source-model)
+                       (create-model res))
+                     num-seeds trace))
     (run-system! system)
-    (if (model=? (system-model system) target-model)
+    (if (model=? (system-model system)
+                 (or target-model (create-model res)))
       (printf "Success.  Energy used = ~a~n" (system-energy system))
       (printf "Failure: final model does not match target.~n"))
     (when (write-trace-files?)
-      (define trace-filename
-        (format "~a/FA~a_soln.nbt"
-                directory
-                (~a n #:width 3 #:align 'right #:pad-string "0")))
-      (save-trace! trace-filename trace))))
+      (save-trace! (format "~a/F~a.nbt" directory (problem->string p))
+                   trace))))
 
 (main)
